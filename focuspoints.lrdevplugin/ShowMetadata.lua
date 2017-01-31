@@ -1,5 +1,5 @@
 --[[
-  Copyright 2016 Joshua Musselwhite, Whizzbang Inc
+  Copyright 2016 Whizzbang Inc
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -25,47 +25,44 @@ local LrPathUtils = import 'LrPathUtils'
 local LrStringUtils = import "LrStringUtils"
 
 require "MetaDataDialog"
+require "ExifUtils"
 require "Utils"
 
 local function showDialog()
   LrFunctionContext.callWithContext("showDialog", function(context)
-  
-  MetaDataDialog.create()
+
   local catalog = LrApplication.activeCatalog()
   local targetPhoto = catalog:getTargetPhoto()
-  
+
   LrTasks.startAsyncTask(function(context)
     --https://forums.adobe.com/thread/359790
     LrFunctionContext.callWithContext("function", function(dialogContext)
         LrFunctionContext.callWithContext("function2", function(dialogContext2)
           local dialogScope = LrDialogs.showModalProgressDialog {
             title = "Loading Data",
-            caption = "Reading Metadata", 
+            caption = "Reading Metadata",
             width = 200,
             cannotCancel = false,
-            functionContext = dialogContext2, 
+            functionContext = dialogContext2,
           }
           dialogScope:setIndeterminate()
-    
-          local metaData = readMetaData(targetPhoto)
-          metaData = filterInput(metaData)
-          local column1, column2 = splitForColumns(metaData)
-        
+
+          local metaData = ExifUtils.readMetaData(targetPhoto)
+          metaData = ExifUtils.filterInput(metaData)
+          column1, column2, column1Length, column2Length, numLines = splitForColumns(metaData)
+
           dialogScope:done()
-          MetaDataDialog.labels.title = column1
-          MetaDataDialog.data.title = column2
-          --MetaDataDialog.labels.title = "parts: "  .. parts[1].key
         end)
-    
+
       LrTasks.sleep(0)
       LrDialogs.presentModalDialog {
         title = "Metadata display",
-        resizable = true, 
+        resizable = true,
         cancelVerb = "< exclude >",
         actionVerb = "OK",
-        contents = MetaDataDialog.contents
+        contents = MetaDataDialog.create(column1, column2, column1Length, column2Length, numLines)
       }
-    
+
     end)
   end)
 end)
@@ -76,28 +73,39 @@ function splitForColumns(metaData)
   local parts = createParts(metaData)
   local labels = ""
   local values = ""
+  local maxLabelsLength = 0
+  local maxValuesLength = 0
+  local numOfLines = 0;
   for k in pairs(parts) do
     local l = parts[k].key
+    
     local v = parts[k].value
-    if (l == nill) then l = "" end
-    if (v == nill) then v = "" end
+    if l == nil then l = "" end
+    if v == nil then v = "" end
     l = LrStringUtils.trimWhitespace(l)
     v = LrStringUtils.trimWhitespace(v)
+    
+    maxLabelsLength = math.max(maxLabelsLength, string.len(l))
+    maxValuesLength = math.max(maxValuesLength, string.len(v))
+    numOfLines = numOfLines + 1
+    
+    --logDebug("ShowMetadata", "l: " .. l)
+    --logDebug("ShowMetadata", "v: " .. v)
     
     labels = labels .. l .. "\r"
     values = values .. v .. "\r"
   end
-  return labels, values
+  return labels, values, maxLabelsLength, maxValuesLength, numOfLines
   
 end
 
 function createParts(metaData)
   local parts = {}
-  local num = 0;
+  local num = 1;
   for i in string.gmatch(metaData, "[^\\\n]+") do 
-    log("i = " .. i)
-    p = splitText(i, ":")
-    if (p ~= nill) then
+    logDebug("ShowMetadata", "i = " .. i)
+    p = stringToKeyValue(i, ":")
+    if p ~= nil then
       parts[num] = p
       num = num+1
     end

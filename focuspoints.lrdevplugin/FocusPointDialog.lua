@@ -1,5 +1,5 @@
 --[[
-  Copyright 2016 Joshua Musselwhite, Whizzbang Inc
+  Copyright 2016 Whizzbang Inc
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,41 +21,45 @@ local LrColor = import 'LrColor'
 require "Utils"
 
 FocusPointDialog = {}
-FocusPointDialog.myText = nil
-FocusPointDialog.display = nil
 
 function FocusPointDialog.calculatePhotoDimens(targetPhoto)
   local appWidth, appHeight = LrSystemInfo.appWindowSize()
   local dimens = targetPhoto:getFormattedMetadata("croppedDimensions")
   local w, h = parseDimens(dimens)
-  local viewFactory = LrView.osFactory()
-  local contentW = appWidth * .7
-  local contentH = appHeight * .7
-  
-  local photoW
-  local photoH
+  local contentWidth = appWidth * .7
+  local contentHeight = appHeight * .7
+
+  local photoWidth
+  local photoHeight
   if (w > h) then
-    photoW = math.min(w, contentW)
-    photoH = h/w * photoW
-  else 
-    photoH = math.min(h, contentH)
-    photoW = w/h * photoH
+    photoWidth = math.min(w, contentWidth)
+    photoHeight = h/w * photoWidth
+    if photoHeight > contentHeight then
+        photoHeight = math.min(h, contentHeight)
+        photoWidth = w/h * photoHeight
+    end
+  else
+    photoHeight = math.min(h, contentHeight)
+    photoWidth = w/h * photoHeight
+    if photoWidth > contentWidth then
+        photoWidth = math.min(w, contentWidth)
+        photoHeight = h/w * photoWidth
+    end
   end
-  return photoW, photoH
-  
+  return photoWidth, photoHeight
+
 end
 
-function FocusPointDialog.createDialog(targetPhoto, overlayView) 
-  local appWidth, appHeight = LrSystemInfo.appWindowSize()
-  local photoW, photoH = FocusPointDialog.calculatePhotoDimens(targetPhoto)
-  
+function FocusPointDialog.createDialog(targetPhoto, overlayView)
+  local photoWidth, photoHeight = FocusPointDialog.calculatePhotoDimens(targetPhoto)
+
   -- temporary for dev'ing
   local developSettings = targetPhoto:getDevelopSettings()
   
   local viewFactory = LrView.osFactory()
   local myPhoto = viewFactory:catalog_photo {
-    width = photoW, 
-    height = photoH,
+    width = photoWidth, 
+    height = photoHeight,
     photo = targetPhoto,
   }
   local myText = viewFactory:static_text {
@@ -71,7 +75,14 @@ function FocusPointDialog.createDialog(targetPhoto, overlayView)
     place = 'overlapping', 
   }
   
-  FocusPointDialog.myText = myText
-  FocusPointDialog.display = myView
-
+  -- windows has the z index switched
+  if (WIN_ENV) then
+    myView = viewFactory:view {
+      overlayView, column, 
+      place = 'overlapping', 
+    }
+  end
+  
+  return myView
+  
 end

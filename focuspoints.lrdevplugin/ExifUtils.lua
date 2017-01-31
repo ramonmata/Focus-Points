@@ -1,5 +1,5 @@
 --[[
-  Copyright 2016 Joshua Musselwhite, Whizzbang Inc
+  Copyright 2016 Whizzbang Inc
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -18,18 +18,35 @@ local LrTasks = import 'LrTasks'
 local LrFileUtils = import 'LrFileUtils'
 local LrPathUtils = import 'LrPathUtils'
 local LrStringUtils = import "LrStringUtils"
+local LrSystemInfo = import "LrSystemInfo"
+local LrUUID = import "LrUUID"
 
 ExifUtils = {}
+exiftool = LrPathUtils.child( _PLUGIN.path, "bin" )
+exiftool = LrPathUtils.child(exiftool, "exiftool")
+exiftool = LrPathUtils.child(exiftool, "exiftool")
 
-function ExifUtils.getExifCmd(targetPhoto) 
-  
+exiftoolWindows = LrPathUtils.child( _PLUGIN.path, "bin" )
+exiftoolWindows = LrPathUtils.child(exiftoolWindows, "exiftool.exe")
+
+function ExifUtils.getExifCmd(targetPhoto)
   local path = targetPhoto:getRawMetadata("path")
-  local metaDataFile = LrPathUtils.removeExtension(path)
-  metaDataFile = metaDataFile .. "-metadata.txt"
+  local metaDataFile = LrPathUtils.child(LrPathUtils.getStandardFilePath("temp"), LrUUID.generateUUID() .. ".txt")
+  local singleQuoteWrap = '\'"\'"\''
   
-  local cmd = exiftool .. " -a -u -g1 '" .. path .. "' > '" .. metaDataFile .. "'";
+  local cmd
+  if (WIN_ENV) then
+    -- windows needs " around the entire command and then " around each path
+    -- example: ""C:\Users\Joshua\Desktop\Focus Points\focuspoints.lrdevplugin\bin\exiftool.exe" -a -u -sort "C:\Users\Joshua\Desktop\DSC_4636.NEF" > "C:\Users\Joshua\Desktop\DSC_4636-metadata.txt""
+    cmd = '""' .. exiftoolWindows .. '" -a -u -sort ' .. '"'.. path .. '" > "' .. metaDataFile .. '""';
+  else
+    exiftool = string.gsub(exiftool, "'", singleQuoteWrap)
+    path = string.gsub(path, "'", singleQuoteWrap)
+    cmd = "'".. exiftool .. "' -a -u -sort '" .. path .. "' > '" .. metaDataFile .. "'";
+  end
+  logDebug("ExifUtils", "Exif cmd: " .. cmd)
+
   return cmd, metaDataFile
-  
 end
 
 function ExifUtils.readMetaData(targetPhoto)
@@ -40,61 +57,55 @@ function ExifUtils.readMetaData(targetPhoto)
   return fileInfo
 end
 
-function ExifUtils.filterInput(str)
-  --local result = string.gsub(str, "[^a-zA-Z0-9 ,\\./;'\\<>\\?:\\\"\\{\\}\\|!@#\\$%\\^\\&\\*\\(\\)_\\+\\=-\\[\\]~`]", "?");
-  -- FIXME: doesn't strip - or ] correctly
-  local result = string.gsub(str, "[^a-zA-Z0-9 ,\\./;'\\<>\\?:\\\"\\{\\}\\|!@#\\$%\\^\\&\\*\\(\\)_\\+\\=\\-\\[\\\n\\\t~`-]", "?");
-  return result
+--[[
+-- Transforms the output of ExifUtils.readMetaData and returns a key/value lua Table
+-- targetPhoto - LrPhoto to extract the Exif from
+--]]
+function ExifUtils.readMetaDataAsTable(targetPhoto)
+  local metaData = ExifUtils.readMetaData(targetPhoto)
+  if metaData == nil then
+    return nil
+  end
+
+  local parsedTable = {}
+
+  for keyword, value in string.gmatch(metaData, "([^\:]+)\:([^\r\n]*)\r?\n") do
+    keyword = LrStringUtils.trimWhitespace(keyword)
+    value = LrStringUtils.trimWhitespace(value)
+    parsedTable[keyword] = value
+    logDebug("ExifUtils", "Parsed '" .. keyword .. "' = '" .. value .. "'")
+  end
+
+  return parsedTable
 end
 
-function ExifUtils.findValue(metaData, key)
-  local parts = ExifUtils.createParts(metaData)
-  local labels = ""
-  local values = ""
-  for k in pairs(parts) do
-    local l = parts[k].key
-    local v = parts[k].value
-    if (l == nill) then l = "" end
-    if (v == nill) then v = "" end
-    l = LrStringUtils.trimWhitespace(l)
-    v = LrStringUtils.trimWhitespace(v)
-    if (key == l) then
-      return v
+--[[
+-- Returns the first value of "keys" that could be found within the metaDataTable table
+-- Ignores nil and "(none)" as valid values
+-- metaDataTable - the medaData key/value table
+-- keys - the keys to be search for in order of importance
+-- return 1. value of the first key match, 2. which key was used
+--]]
+function ExifUtils.findFirstMatchingValue(metaDataTable, keys)
+  local exifValue = nil
+
+  
+  for key, value in pairs(keys) do          -- value in the keys table is the current exif keyword to be searched
+    exifValue = metaDataTable[value]
+
+    if exifValue ~= nil and exifValue ~= "(none)" then
+      logInfo("ExifUtils", "Searching for " .. value .. " -> " .. exifValue)
+      return exifValue, key
     end
-    
   end
+
+  logInfo("ExifUtils", "Searching for { " .. table.concat(keys, " ") .. " } returned nothing")
   return nil
-  
 end
 
-function ExifUtils.splitForColumns(metaData)
-  local parts = ExifUtils.createParts(metaData)
-  local labels = ""
-  local values = ""
-  for k in pairs(parts) do
-    local l = parts[k].key
-    local v = parts[k].value
-    if (l == nill) then l = "" end
-    if (v == nill) then v = "" end
-    l = LrStringUtils.trimWhitespace(l)
-    v = LrStringUtils.trimWhitespace(v)
-    
-    labels = labels .. l .. "\r"
-    values = values .. v .. "\r"
-  end
-  return labels, values
-  
-end
-
-function ExifUtils.createParts(metaData)
-  local parts = {}
-  local num = 0;
-  for i in string.gmatch(metaData, "[^\\\n]+") do 
-    p = splitText(i, ":")
-    if (p ~= nill) then
-      parts[num] = p
-      num = num+1
-    end
-  end
-  return parts
+function ExifUtils.filterInput(str)
+  local result = string.gsub(str, "[^a-zA-Z0-9 ,\\./;'\\<>\\?:\\\"\\{\\}\\|!@#\\$%\\^\\&\\*\\(\\)_\\+\\=-\\[\\]~`]", "?");
+  -- FIXME: doesn't strip - or ] correctly
+  --local result = string.gsub(str, "[^a-zA-Z0-9 ,\\./;'\\<>\\?:\\\"\\{\\}\\|!@#\\$%\\^\\&\\*\\(\\)_\\+\\=\\-\\[\\\n\\\t~`-]", "?");
+  return result
 end

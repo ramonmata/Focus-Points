@@ -1,5 +1,5 @@
 --[[
-  Copyright 2016 Joshua Musselwhite, Whizzbang Inc
+  Copyright 2016 Whizzbang Inc
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,13 +26,13 @@ function PointsUtils.readFromFile(folder, filename)
   local file = LrPathUtils.child( _PLUGIN.path, "focus_points" )
   file = LrPathUtils.child(file, folder)
   file = LrPathUtils.child(file, filename)
-  
+
   if (LrFileUtils.exists(file) ~= false) then
     local data = LrFileUtils.readFile(file)
     return data
-  else 
+  else
     return nil
-  end 
+  end
 end
 
 function PointsUtils.readIntoTable(folder, filename)
@@ -40,11 +40,11 @@ function PointsUtils.readIntoTable(folder, filename)
   local focusPointDimens = {}
   local data = PointsUtils.readFromFile(folder, filename)
   if (data == nil) then return nil end
-  for i in string.gmatch(data, "[^\\\n]+") do 
-    p = splitText(i, "=")
-    if (p ~= nill) then
+  for i in string.gmatch(data, "[^\\\n]+") do
+    p = splitToKeyValue(i, "=")
+    if p ~= nil then
       local pointName = p.key
-      
+
       pointName = LrStringUtils.trimWhitespace(pointName)
       local index = string.find(p.value, ",")
       local points = {}
@@ -56,11 +56,11 @@ function PointsUtils.readIntoTable(folder, filename)
       y = LrStringUtils.trimWhitespace(y)
       points[1] = tonumber(x)
       points[2] = tonumber(y)
-      --log("pointName: " .. pointName .. ", x: " .. x .. ", y: " .. y)
-      
+      --logDebug("PointsUtils", "pointName: " .. pointName .. ", x: " .. x .. ", y: " .. y)
+
       if (pointName == "focusPointDimens") then
         focusPointDimens = points
-      else 
+      else
         focusPoints[pointName] = points
       end
     end

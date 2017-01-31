@@ -1,5 +1,5 @@
 --[[
-  Copyright 2016 Joshua Musselwhite, Whizzbang Inc
+  Copyright 2016 Whizzbang Inc
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -26,19 +26,30 @@ local LrPathUtils = import 'LrPathUtils'
 
 MetaDataDialog = {}
 
-function MetaDataDialog.create()
-
+function MetaDataDialog.create(column1, column2, column1Length, column2Length, numLines)
   local appWidth, appHeight = LrSystemInfo.appWindowSize()
   local viewFactory = LrView.osFactory()
   
+  -- these props are needed on windows. on mac, they make the columns a bit larger than needed 
+  if (MAC_ENV) then
+    column1Length = nil
+    column2Length = nil
+  end
+  
   local myText = viewFactory:static_text {
-    title = "Will place label here",
+    title = column1,
     selectable = true, 
+    width_in_chars = column1Length,
+    height_in_lines = numLines, 
+    wrap = false,
   }
   
   local myText2 = viewFactory:static_text {
-    title = "Will place data here",
+    title = column2,
     selectable = true, 
+    width_in_chars = column2Length,
+    height_in_lines = numLines, 
+    wrap = false,
   }
   
   local row = viewFactory:row {
@@ -52,8 +63,6 @@ function MetaDataDialog.create()
     height = appHeight *.7,
   }
   
-  MetaDataDialog.contents = scrollView
-  MetaDataDialog.labels = myText
-  MetaDataDialog.data = myText2
+  return scrollView
   
 end

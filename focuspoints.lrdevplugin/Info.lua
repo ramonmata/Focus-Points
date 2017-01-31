@@ -1,5 +1,5 @@
 --[[
-  Copyright 2016 Joshua Musselwhite, Whizzbang Inc
+  Copyright 2016 Whizzbang Inc
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ return {
   LrSdkMinimumVersion = 5.0,
 
 	LrToolkitIdentifier = 'com.thewhizzbang.focuspoint',
-	LrPluginName = "Focus Point",
+	LrPluginName = "Focus Point Viewer",
 	
 	LrLibraryMenuItems = { 
     {
@@ -39,11 +39,12 @@ return {
 
 	VERSION = { major=0, minor=0, revision=1, build=1, },
 
+  LrPluginInfoProvider = 'FocusPointsInfoProvider.lua',
 }
 
 --[[ 
 KNOWN BUGS: 
- 1. LrPhoto.getDevelopmentSettings()["Orientation"] return nill. I have no way of knowing if the photo
+ 1. LrPhoto.getDevelopmentSettings()["Orientation"] return nil. I have no way of knowing if the photo
         was rotated in development mode
  2. Orientation must be determined from the metadata. The metdata does not tell me if the camera was upside down
         e.g. rotation of 180 degrees. It only tells me normal, 90, or 270

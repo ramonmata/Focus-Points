@@ -1,5 +1,5 @@
 --[[
-  Copyright 2016 Joshua Musselwhite, Whizzbang Inc
+  Copyright 2016 Whizzbang Inc
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -21,7 +21,13 @@
 require "DefaultPointRenderer"
 require "PointsUtils"
 require "DefaultDelegates"
-require "FujiDelegates"
+require "CanonDelegates"
+require "FujifilmDelegates"
+require "OlympusDelegates"
+require "PanasonicDelegates"
+require "AppleDelegates"
+require "NikonDuplicates"
+
 local LrErrors = import 'LrErrors'
 
 PointsRendererFactory = {}
@@ -29,36 +35,71 @@ PointsRendererFactory = {}
 function PointsRendererFactory.createRenderer(photo)
   local cameraMake = photo:getFormattedMetadata("cameraMake")
   local cameraModel = photo:getFormattedMetadata("cameraModel")
-  
-  -- change the metadata names here
-  if (string.lower(cameraMake) == "ricoh imaging company, ltd." and string.lower(cameraModel) == "pentax k-1") then
-    DefaultDelegates.metaKeyAfPointUsed = "AF Points Selected"
+
+  if (cameraMake == nil or cameraModel == nil) then
+    LrErrors.throwUserError("File doesn't contain camera maker or model")
   end
+
+  cameraMake = string.lower(cameraMake)
+  cameraModel = string.lower(cameraModel)
   
-  if (cameraMake == "FUJIFILM") then
-      DefaultPointRenderer.funcGetAFPixels = FujiDelegates.getFujiAfPoints
-      DefaultPointRenderer.focusPointDimen = {1,1} -- this is wrong. it's probably more like 300,250
-  else 
-    local pointsMap, pointDimen = PointsRendererFactory.getFocusPoints(photo)
+  logInfo("PointsRenderFactory", "Camera Make: " .. cameraMake)
+  logInfo("PointsRenderFactory", "Camera Model: " .. cameraModel)
+  
+  -- some cameras have the same mapping as other camera
+  -- check the cameraModel and switch it to a known map if it's a duplicate
+  if (cameraMake == "nikon corporation") then
+    local duplicateModel = NikonDuplicates[cameraModel]
+    if (duplicateModel ~= nil) then
+      cameraModel = duplicateModel
+    end
+  end
+
+  if (cameraMake == "fujifilm") then
+    DefaultDelegates.focusPointsMap = nil     -- unused
+    DefaultDelegates.focusPointDimen = nil    -- unused
+    DefaultPointRenderer.funcGetAfPoints = FujifilmDelegates.getAfPoints
+  elseif (cameraMake == "canon") then
+    DefaultDelegates.focusPointsMap = nil     -- unused
+    DefaultDelegates.focusPointDimen = nil    -- unused
+    DefaultPointRenderer.funcGetAfPoints = CanonDelegates.getAfPoints
+  elseif (cameraMake == "apple") then
+    DefaultDelegates.focusPointsMap = nil     -- unused
+    DefaultDelegates.focusPointDimen = nil    -- unused
+    DefaultPointRenderer.funcGetAfPoints = AppleDelegates.getAfPoints
+  elseif (string.find(cameraMake, "olympus", 1, true)) then
+    DefaultDelegates.focusPointsMap = nil     -- unused
+    DefaultDelegates.focusPointDimen = nil    -- unused
+    DefaultPointRenderer.funcGetAfPoints = OlympusDelegates.getAfPoints
+  elseif (string.find(cameraMake, "panasonic", 1, true)) then
+    DefaultDelegates.focusPointsMap = nil     -- unused
+    DefaultDelegates.focusPointDimen = nil    -- unused
+    DefaultPointRenderer.funcGetAfPoints = PanasonicDelegates.getAfPoints
+  else
+    local pointsMap, pointDimen = PointsRendererFactory.getFocusPoints(photo, cameraMake, cameraModel)
     DefaultDelegates.focusPointsMap = pointsMap
-    DefaultPointRenderer.funcGetAFPixels = DefaultDelegates.getDefaultAfPoints
-    DefaultPointRenderer.focusPointDimen = pointDimen
+    DefaultDelegates.focusPointDimen = pointDimen
+    DefaultPointRenderer.funcGetAfPoints = DefaultDelegates.getAfPoints
   end
-  
-  
-  DefaultPointRenderer.funcGetShotOrientation = DefaultDelegates.getShotOrientation
+
   return DefaultPointRenderer
 end
 
-function PointsRendererFactory.getFocusPoints(photo)
-  local cameraMake = photo:getFormattedMetadata("cameraMake")
-  local cameraModel = photo:getFormattedMetadata("cameraModel")
+--[[
+  Method to get the focus point maps from the text files. The params 
+  passed in may be changed from what the camera reports. For instance, if the camera is a Nikon D7100
+  the cameraModel will be passed as "nikon d7200" since they share the same
+  focus point map.
   
-  local focusPoints, focusPointDimens =  PointsUtils.readIntoTable(string.lower(cameraMake), string.lower(cameraModel) .. ".txt")
-  
+  cameraMake - make of the camera
+  cameraModel - make of the camera
+--]]
+function PointsRendererFactory.getFocusPoints(photo, cameraMake, cameraModel)
+  local focusPoints, focusPointDimens = PointsUtils.readIntoTable(cameraMake, cameraModel .. ".txt")
+
   if (focusPoints == nil) then
-    return "No (or incorrect) mapping found at: \n" .. string.lower(cameraMake) .. "/" .. string.lower(cameraModel) .. ".txt"
-  else 
+    return "No (or incorrect) mapping found at: \n" .. cameraMake .. "/" .. cameraModel .. ".txt"
+  else
     return focusPoints, focusPointDimens
   end
 end
